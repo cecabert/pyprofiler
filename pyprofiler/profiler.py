@@ -120,6 +120,14 @@ class ProfilerCase:
         self._profiler = profiler
         self._profile_cases = self.list_functions(self, func)
 
+    def setUp(self):
+        "Hook method for setting up the profile fixture before exercising it."
+        pass
+
+    def tearDown(self):
+        "Hook method for deconstructing the profile fixture after testing it."
+        pass
+
     def trace(self, name: str):
         """
         Add a trace event
@@ -154,8 +162,13 @@ class ProfilerCase:
             stream.write(dotted_line)
             # Start profiler using context manager
             if not skipped:
+                # Setup
+                self.setUp()
+                # Run profile fixture
                 with self._profiler as prof:
                     prof(case_fn)
+                # Tear down
+                self.tearDown()
                 # Report
                 self._profiler.report(stream)
             else:

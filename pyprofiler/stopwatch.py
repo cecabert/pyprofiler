@@ -58,7 +58,7 @@ class StopWatchProfiler(Profiler):
 
     def report(self, stream):
         # Header
-        template = '{0:<6} {1:<20} {2:>12}'
+        template = '{0:<6} {1:<57} {2:>12}'
         hdr = template.format('Index',
                               'Trace Name',
                               'Delta Time [{}]'.format(self._units))

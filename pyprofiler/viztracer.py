@@ -10,9 +10,18 @@
 """
 import os
 from os.path import dirname, join
+import sys
+import signal
+import shutil
+import time
 from glob import glob
 from argparse import ArgumentParser
+import multiprocessing as mp
+import threading
+from tempfile import mkdtemp
 from viztracer import VizTracer
+from viztracer.patch import install_all_hooks
+from viztracer.main import ReportBuilder, same_line_print
 from viztracer.viewer import DirectoryViewer, ServerThread
 from pyprofiler.profiler import (Profiler,
                                  format_profile_filename)
@@ -84,6 +93,11 @@ def _file_viewer(output_file: str,
         os.chdir(cwd)
 
 
+def _term_handler(signalnum, frame):
+    sys.exit(0)
+
+
+
 @register_profiler(name='viztracer')
 class VizTracerProfiler(Profiler):
     """ VizTracer interface """
@@ -108,6 +122,11 @@ class VizTracerProfiler(Profiler):
                             type=str,
                             default='result.json',
                             help='Default file path to write report')
+        parser.add_argument("--ignore_multiprocess",
+                            action="store_true",
+                            default=False,
+                            help='Do not log any process other than the main '
+                                 'process')
         # Visualization related
         parser.add_argument("--server-only",
                             default=False,
@@ -130,42 +149,115 @@ class VizTracerProfiler(Profiler):
                  verbose: int = 1,
                  max_stack_depth: int = -1,
                  output_file: str = "result.json",
+                 ignore_multiprocess: bool = False,
                  server_only: bool = False,
                  port: int = 9001,
                  flamegraph: bool = False):
         # Tracer options
-        self._output_file = output_file
-        self._tracer_opt = {'tracer_entries': tracer_entries,
-                            'verbose': verbose,
-                            'max_stack_depth': max_stack_depth}
-        output_file = format_profile_filename(output_file)
-        self._tracer = VizTracer(tracer_entries=tracer_entries,
-                                 verbose=verbose,
-                                 max_stack_depth=max_stack_depth,
-                                 output_file=output_file)
+        self.ofile = None
+        self.ofile_template = output_file
+        self.exiting = False
+        self.parent_pid = None
+        self.multiprocess_output_dir: str = mkdtemp()
+        self.ignore_multiprocess = ignore_multiprocess
+        self.cwd: str = os.getcwd()
+        self.verbose = verbose
+        # Tracer kwargs
+        output_file = join(self.multiprocess_output_dir, 'result.json')
+        self.tracer_opt = {'tracer_entries': tracer_entries,
+                           'verbose': verbose,
+                           'output_file': output_file,
+                           'max_stack_depth': max_stack_depth,
+                           'pid_suffix': True,
+                           'file_info': False,
+                           'register_global': True,
+                           'dump_raw': True}
+        self.tracer = None
         # Visualizer
-        self._viz_opt = {'server_only': server_only,
-                         'port': port,
-                         'once': False,
-                         'flamegraph': flamegraph,
-                         'timeout': 10}
+        self.viz_opt = {'server_only': server_only,
+                        'port': port,
+                        'once': False,
+                        'flamegraph': flamegraph,
+                        'timeout': 10}
 
-    def _initialize(self):
-        output_file = format_profile_filename(self._output_file)
-        return VizTracer(output_file=output_file, **self._tracer_opt)
+    def _exit_routine(self) -> None:
+        if self.tracer is not None:
+            if not self.exiting:
+                self.exiting = True
+                if self.verbose > 0:
+                    same_line_print("Saving trace data, this could take a while")
+                self.tracer.exit_routine()
+                self._save()
+
+    def _save(self):
+        ofile = self.ofile
+        self._wait_children_finish()
+        reports = [join(self.multiprocess_output_dir, f)
+                   for f in os.listdir(self.multiprocess_output_dir)
+                   if f.endswith(".json")]
+        builder = ReportBuilder(reports,
+                                verbose=self.verbose)
+        builder.save(output_file=ofile)
+        shutil.rmtree(self.multiprocess_output_dir)
+
+    def _wait_children_finish(self) -> None:
+        try:
+            if any((f.endswith(".viztmp") for f in os.listdir(self.multiprocess_output_dir))):
+                same_line_print("Wait for child processes to finish, Ctrl+C to skip")
+                while any((f.endswith(".viztmp") for f in os.listdir(self.multiprocess_output_dir))):
+                    time.sleep(0.5)
+        except KeyboardInterrupt:
+            pass
 
     def start(self):
-        self._tracer = self._initialize()
-        self._tracer.start()
+        # Initialize tracer
+        self.parent_pid = os.getpid()
+        self.exiting = False
+        # Update
+        self.ofile = format_profile_filename(self.ofile_template)
+        tracer = VizTracer(**self.tracer_opt)
+        self.tracer = tracer
+
+        # Patch multiprocessing
+        install_all_hooks(tracer=tracer,
+                          args=[],
+                          patch_multiprocess=True)
+        signal.signal(signal.SIGTERM, _term_handler)
+        mp.util.Finalize(self, self._exit_routine, exitpriority=-1)
+
+        # Start tracer
+        self.tracer.start()
 
     def reset(self):
-        self._tracer.stop()
-        self._tracer.save()
-        self._tracer.terminate()
+        # Stop tracer
+        self.tracer.stop()
+
+        if os.getpid() != self.parent_pid:
+            mp.util.Finalize(self.tracer,
+                             self.tracer.exit_routine,
+                             exitpriority=-1)
+
+        # issue141 - concurrent.future requires a proper release by executing
+        # threading._threading_atexits or it will deadlock if not explicitly
+        # release the resource in the code
+        # Python 3.9+ has this issue
+        try:
+            if threading._threading_atexits:  # type: ignore
+                for atexit_call in threading._threading_atexits:  # type: ignore
+                    atexit_call()
+                threading._threading_atexits = []  # type: ignore
+        except AttributeError:
+            pass
+
+        # Call exit functions
+        self._exit_routine()
+
+        # self.tracer.save()
+        # self.tracer.terminate()
 
     def trace(self, name: str):
         """ Add trace to profiling session """
-        self._tracer.log_instant(name=name)
+        self.tracer.log_instant(name=name)
 
     def report(self, stream):
         stream.write('Case profiling is done!')
@@ -173,9 +265,9 @@ class VizTracerProfiler(Profiler):
     def summarize_session(self):
         """ Summarize profiling session by starting webpage """
         # How many profiling cases is there ?
-        n_cases = _count_profiler_cases(self._output_file)
+        n_cases = _count_profiler_cases(self.ofile)
         if n_cases > 1:
-            folder = dirname(self._output_file)
-            _directory_viewer(folder, **self._viz_opt)
+            folder = dirname(self.ofile)
+            _directory_viewer(folder, **self.viz_opt)
         else:
-            _file_viewer(self._output_file, **self._viz_opt)
+            _file_viewer(self.ofile, **self.viz_opt)

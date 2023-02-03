@@ -1,0 +1,5 @@
+matplotlib
+memory_profiler
+numpy
+psutil
+viztracer

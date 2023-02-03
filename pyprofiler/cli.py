@@ -102,7 +102,7 @@ def main(args: Namespace):
     else:
         profiler_cases, specific_func = _discover_profiler_cases(args.input)
     # Create profiler
-    profiler: Profiler = ProfilerFactory.create(name=args.type, **args)
+    profiler: Profiler = ProfilerFactory.create(name=args.type, **vars(args))
     # Run them
     for prof_case in profiler_cases:
         ctor = ArgsDispatcher(prof_case)
