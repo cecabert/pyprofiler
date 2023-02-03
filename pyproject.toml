@@ -1,0 +1,29 @@
+[build-system]
+    requires = ["setuptools>=61.0.0", "wheel"]
+    build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyprofiler"
+version = "0.1.0"
+requires-python = ">=3.8"
+description = "Python profiling tools inspired by `unittest` package. The idea is to write code only once while being able to use different profilers"
+dynamic = ["readme"]
+license = {text = "MIT License"}
+classifiers = [
+    "Development Status :: Beta",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules"]
+dependencies = [
+    "matplotlib",
+    "memory_profiler",
+    "numpy",
+    "psutil",
+    "viztracer"]
+
+[project.urls]
+repository = "https://github.com/cecabert/pyprofiler"
+
+[tool.setuptools.dynamic]
+readme = {file = "README.md"}

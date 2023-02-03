@@ -4,6 +4,10 @@ The goal of `PyProfiler` is to unify the way python code gets profiled (i.e. exe
 
 To achieve this goal, the task is splitted into two interfaces. The `Profiler` class, responsible of handling various type of profiler, and the `ProfilerCase` class that holds all the profiling case defined by the user.
 
+# Install
+
+Installation instruction
+
 # Profiler
 
 The `Profiler` interface is responsible for interfacing with available profiter through a simple unified interface. Not all the cases will be covered, therefore some profilers might not fit into it. 
@@ -60,9 +64,9 @@ Some profiler cases might not be relevant for a specific type of profiler. The `
 
 ### Specific profiler
 
-On the other hand, some profile cases might be relevant for only a single type of profiler. The `@accept_profiler(<profiler names>`)` enable the underlying case for only a subset of specific profilers matching the `<profiler names>`.
+On the other hand, some profile cases might be relevant for only a single type of profiler. The `@accept_profiler(<profiler names>`) enable the underlying case for only a subset of specific profilers matching the `<profiler names>`.
 
-### Example
+### Usage
 
 The example below shows how decorators can be used to refine the profiling granularity.
 
