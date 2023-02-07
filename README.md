@@ -10,7 +10,7 @@ Installation instruction
 
 # Profiler
 
-The `Profiler` interface is responsible for interfacing with available profiter through a simple unified interface. Not all the cases will be covered, therefore some profilers might not fit into it. 
+The `Profiler` interface is responsible for interfacing with available profiter through a simple unified interface. Not all the cases will be covered, therefore some profilers might not fit into it.
 
 Out of the box, there are a few profilers shipped with this package splitted into two categories: `time` for measuring execution time, and `memory` for measuring memory usage. The list below gives the exhaustive list:
 
@@ -21,6 +21,8 @@ Out of the box, there are a few profilers shipped with this package splitted int
 - Memory
   - `TraceMallocProfiler` interface for [tracemalloc](https://docs.python.org/3/library/tracemalloc.html) supporting single thread
   - `MemoryProfilerLine` and `MemoryProfilerTime` interface for [memory-profiler](https://github.com/pythonprofilers/memory_profiler) supporting single/mutli thread
+- Relationship
+  - `CallGraphProfiler` generate function call graphs, adapted from [pycallgraph](https://github.com/gak/pycallgraph) and [pycallgraph2](https://github.com/daneads/pycallgraph2/tree/master)
 
 # ProfilerCase
 
@@ -43,12 +45,12 @@ class ProflingExample(ProfilerCase):
 
     def profile_my_func(self):
         # Add any code that need to be profiled
-        
+
         # <USER CODE>
         pass
 ```
 
-At runtime, the profiler is runed against all the registered cases. 
+At runtime, the profiler is runed against all the registered cases.
 
 ## Decorators
 
@@ -56,7 +58,7 @@ However, some cases might not be meaningfull for a specific type of profiler. Th
 
 ### Disable
 
-The `@skip_case` decorator allow the user to disable some specific cases for whatever reasons. 
+The `@skip_case` decorator allow the user to disable some specific cases for whatever reasons.
 
 ### Disable profiler
 

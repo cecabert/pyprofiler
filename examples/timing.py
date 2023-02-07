@@ -12,7 +12,6 @@ import numpy as np
 from pyprofiler.profiler import ProfilerCase
 from pyprofiler.utils.decorator import accept_profiler
 
-
 def fibonacci(n: int) -> int:
     if n < 0:
         raise ValueError(f'Parameter `n` can not be negative, got {n}')
@@ -24,10 +23,10 @@ def fibonacci(n: int) -> int:
     # Recursion
     else:
         return fibonacci(n - 1) + fibonacci(n - 2)
-    
+
 
 def prime_number(n: int) -> List[int]:
-    
+
     def isprime(num: int) -> bool:
         if num == 0 or num == 1:
             return False
@@ -36,7 +35,7 @@ def prime_number(n: int) -> List[int]:
                 return False
         else:
             return True
-        
+
     return list(filter(isprime, range(0, n)))
 
 
@@ -51,7 +50,7 @@ def bubble_sort(array):
         if sorted_item:
             break
     return array
-    
+
 
 def _run(processes, func):
     for p in processes:
@@ -72,17 +71,17 @@ class TimeProfilingCases(ProfilerCase):
         # Call another time consuming functions
         self.trace('Fibonnaci with `n`=20')
         fibonacci(20)
-        
+
     @accept_profiler(['cprofile', 'stopwatch'])
     def profile_sort(self):
-        
+
         data1 = np.random.randint(1, 100000, size=10000)
         data2 = np.random.randint(1, 100000, size=5000)
         self.trace('Generated data')
-        
+
         bubble_sort(data1)
         self.trace('Full array sorted')
-        
+
         bubble_sort(data2)
         self.trace('Half array sorted')
 

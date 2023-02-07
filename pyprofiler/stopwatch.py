@@ -67,11 +67,11 @@ class StopWatchProfiler(Profiler):
         stream.write('=' * len(hdr))
         # Traces
         scale = _units[self._units]
-        for k, (name, curr_t) in enumerate(self._times):
+        for k, (tr_name, curr_t) in enumerate(self._times):
             if k == 0:
                 dt = 0.0
             else:
                 dt = (curr_t - self._times[0][1]) * scale
-            line = template.format(k, name, '{:5.1f}'.format(dt))
+            line = template.format(k, tr_name, '{:5.1f}'.format(dt))
             stream.write(line)
         return super().report(stream)

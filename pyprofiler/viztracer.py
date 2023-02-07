@@ -4,7 +4,6 @@
   @data: 13 October 2022
   @author: cecabert
 
-
   Interface for `VizTracer`
   https://github.com/gaogaotiantian/viztracer
 """

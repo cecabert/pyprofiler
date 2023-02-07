@@ -1,3 +1,4 @@
+graphviz
 matplotlib
 memory_profiler
 numpy
