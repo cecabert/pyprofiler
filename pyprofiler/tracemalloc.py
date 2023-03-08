@@ -79,8 +79,10 @@ class TraceMallocProfiler(Profiler):
         if not tm.is_tracing():
             self._snapshots = []
             tm.start()
+            self.trace(name='start')
 
     def reset(self):
+        self.trace(name='stop')
         tm.stop()
 
     def trace(self, name: str):
@@ -95,9 +97,13 @@ class TraceMallocProfiler(Profiler):
             snap = self._snapshots[snap_idx]
             # Stats
             snap = _filter_snapshot(snap)
+
+
+
             stats = snap.statistics(self._key)
             top_k = min(self._top_k, len(stats))
-            hdr = f'Top {top_k} stats grouped by filename and line number'
+            hdr = f'Top {top_k} stats of `{snap_idx}`th snapshot, '\
+                  f'grouped by {self._key}'
             stream.write(hdr)
             # Top-k
             for idx, s in enumerate(stats[:top_k]):

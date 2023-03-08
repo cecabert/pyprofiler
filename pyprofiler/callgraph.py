@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from argparse import ArgumentParser
 from fnmatch import fnmatch
 import colorsys
+import operator as op
 import graphviz as gv
 from matplotlib.cm import get_cmap
 from pyprofiler.profiler import Profiler
@@ -149,6 +150,9 @@ class Node:
     time: Stats
     units: str
 
+    def value(self) -> float:
+        return float(self.time.fraction * 2.0 + self.calls.fraction) / 3.0
+
     def label(self) -> Dict[str, str]:
         parts = [f'{self.name}',
                  f'calls: {self.calls.value:n}',
@@ -164,6 +168,9 @@ class Edge:
     time: Stats
     from_node: str
     to_node: str
+
+    def value(self) -> float:
+        return float(self.time.fraction * 2.0 + self.calls.fraction) / 3.0
 
     def label(self) -> str:
         return f'{self.calls.value}'
@@ -192,15 +199,19 @@ class Color:
 
     @classmethod
     def from_node(cls, node: Node, cmap: Optional[str] = None):
-        value = float(node.time.fraction * 2.0 + node.calls.fraction) / 3.0
-        # return cls.hsv(value / 2 + .5, value, 0.9)
-        return cls.plt(value, alpha=0.9, cmap=cmap)
+        return cls.plt(node.value(), alpha=0.9, cmap=cmap)
 
     @classmethod
     def from_edge(cls, edge: Edge, cmap: Optional[str] = None):
-        value = float(edge.time.fraction * 2 + edge.calls.fraction) / 3
-        # return Color.hsv(value / 2 + .5, value, 0.7)
-        return cls.plt(value, alpha=0.7, cmap=cmap)
+        return cls.plt(edge.value(), alpha=0.7, cmap=cmap)
+
+    @classmethod
+    def black(cls):
+        return cls(0.0, 0.0, 0.0, 1.0)
+
+    @classmethod
+    def white(cls):
+        return cls(1.0, 1.0, 1.0, 1.0)
 
     @property
     def r255(self):
@@ -225,7 +236,6 @@ class Color:
     def rgba_web(self):
         '''Returns a string with the RGBA components as a HTML hex string.'''
         return '{0}{1.a255:02x}'.format(self.rgb_web(), self)
-
 
 
 def _dict_int_init():
@@ -377,8 +387,11 @@ class Graph:
                  font: str = 'Verdana',
                  font_size: int = 7,
                  group_font_size: int = 10,
-                 cmap: Optional[str] = 'jet'):
+                 cmap: Optional[str] = 'jet',
+                 comparator: str = 'greater'):
 
+        black = Color.black().rgba_web()
+        white = Color.white().rgba_web()
         graph_attr = {'overlap': 'scalexy',
                       'fontname': font,
                       'fontsize': str(font_size),
@@ -411,8 +424,13 @@ class Graph:
                     c.node(node.name)
 
         # Add nodes
+        _cmp = {'lower': op.lt,
+                'greater': op.gt}
         for node in self.nodes():
-            attrs = {'color': Color.from_node(node, cmap).rgba_web()}
+            fcn = _cmp[comparator]
+            fontcolor = white if fcn(node.value(), 0.5) else black
+            attrs = {'color': Color.from_node(node, cmap).rgba_web(),
+                     'fontcolor': fontcolor}
             graph.node(node.name,
                        label=node.label(),
                        **attrs)
@@ -509,6 +527,11 @@ class CallGraphProfiler(Profiler):
                             default=None,
                             help='Matplotlib color name used for color '
                                  'formatting')
+        parser.add_argument('--comparator',
+                            type=str,
+                            default='greater',
+                            choices=('greater', 'lower'),
+                            help='Font color comparator function')
         parser.add_argument('--folder',
                             type=str,
                             default=None,
@@ -527,6 +550,7 @@ class CallGraphProfiler(Profiler):
                  font_size: int = 7,
                  group_font_size: int = 10,
                  colormap: Optional[str] = None,
+                 comparator: str = 'greater',
                  folder: Optional[str] = None):
         super().__init__()
         self.worker = None
@@ -540,6 +564,7 @@ class CallGraphProfiler(Profiler):
         self.font_size = font_size
         self.group_font_size = group_font_size
         self.colormap = colormap
+        self.comparator = comparator
         if folder is None:
             folder = getcwd()
         self.folder = folder
@@ -578,6 +603,7 @@ class CallGraphProfiler(Profiler):
                                    font=self.font,
                                    font_size=self.font_size,
                                    group_font_size=self.group_font_size,
-                                   cmap=self.colormap)
+                                   cmap=self.colormap,
+                                   comparator=self.comparator)
         stream.write(f'Generate call graph into `{gfilename}`')
 

@@ -54,7 +54,8 @@ def _generate_plots(files: List[str],
                     options: Optional[NamedTuple] = None,
                     timestamps: bool = False,
                     traces: Dict[str, List[Tuple[str, float]]] = {},
-                    output_folder: Optional[str] = None):
+                    output_folder: Optional[str] = None,
+                    keep_original_file: bool = False):
     if options is None:
         options = PlotOptions(slope=True, xlim=None)
 
@@ -114,6 +115,8 @@ def _generate_plots(files: List[str],
         else:
             plt.show(block=True)
         plt.close(fig=fig)
+        if not keep_original_file:
+            os.remove(file)
 
 
 class MemTimerMultiprocess(MemTimer):
@@ -231,7 +234,7 @@ class ParseCallNode(ast.NodeVisitor):
         self.func = []
 
     def visit_Attribute(self, node):
-        ast.NodeVisitor.generic_visit(self, node)
+        self.generic_visit(node)
         self.func.append(node.attr)
 
     def visit_Name(self, node):
@@ -240,6 +243,28 @@ class ParseCallNode(ast.NodeVisitor):
     @property
     def function_name(self):
         return '.'.join(self.func)
+
+
+class CollectFunctionDef(ast.NodeVisitor):
+
+    def __init__(self):
+        self._funcs = []
+
+    def __call__(self, filename: str):
+        with open(filename, 'rt') as f:
+            content = f.read()
+        tree = ast.parse(content)
+        self.visit(tree)
+        return self._funcs
+
+    def visit_ClassDef(self, node: ast.ClassDef):
+        # Skip class definition, we're not interested in method defined in a
+        # class
+        pass
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        self._funcs.append(node.name)
+        self.generic_visit(node)
 
 
 class GatherFunctionCall(ast.NodeVisitor):
@@ -255,7 +280,7 @@ class GatherFunctionCall(ast.NodeVisitor):
         p = ParseCallNode()
         p.visit(node.func)
         self.func.append(p.function_name)
-        ast.NodeVisitor.generic_visit(self, node)
+        self.generic_visit(node)
 
     def __call__(self, code: str):
         sanitized_code = textwrap.dedent(code)
@@ -317,19 +342,17 @@ class RecursiveCodeMap(CodeMap):
         if not _is_inner_function_def(code, toplevel_code):
             self._funcs.append((toplevel, filename, code, linenos, sub_lines))
         self[code] = {} if toplevel else self[toplevel_code]
-        # Do we call other functions ?
-        src = _get_source(code)
-        for fn_called in GatherFunctionCall()(src):
-            if fn_called not in code.co_varnames:
-                if 'self' in fn_called:
-                    msg = 'Calling class methods within `ProfilerCase.profile'\
-                        '_xyz(self)` methods is not supported at the moment!'
-                    raise ValueError(msg)
-                m = load_module(code.co_filename)
-                fn_called = getattr(m, fn_called)
+
+        # Do we call other functions defined in same file as profile_cases ?
+        # src = _get_source(code)
+        for func in CollectFunctionDef()(filename):
+            if func in code.co_names:
+                m = load_module(filename)
+                fn_called = getattr(m, func)
                 self.add(fn_called.__code__,
                          toplevel_code=code,
                          depth=depth + 1)
+
         # Deal with lambda functions defined inside
         for subcode in filter(inspect.iscode, code.co_consts):
             self.add(subcode, toplevel_code=code, depth=depth)
@@ -429,6 +452,11 @@ class MemoryProfilerTime(Profiler):
                             type=str,
                             default=None,
                             help='Location where to save generated plots')
+        parser.add_argument('--keep_file',
+                            action='store_true',
+                            default=False,
+                            help='If set, will keep the original trace file, '
+                                 'otherwise discard it.')
 
     @classmethod
     def description(cls) -> str:
@@ -440,13 +468,15 @@ class MemoryProfilerTime(Profiler):
                  include_children: bool = False,
                  multiprocess: bool = False,
                  backend: str = 'psutils',
-                 plots_directory: Optional[str] = None):
+                 plots_directory: Optional[str] = None,
+                 keep_original_file: bool = False):
         self._mprofile_output: str = None
         self._interval = interval
         self._include_children = include_children
         self._multiprocess = multiprocess
         self._backend = backend
         self._plot_directory = plots_directory
+        self._keep_original_file = keep_original_file
         self._traces: Dict[str, List[Tuple[str, float]]] = {}
 
     def start(self):
@@ -480,7 +510,8 @@ class MemoryProfilerTime(Profiler):
         # Generates figures
         _generate_plots(files=mprof_files,
                         traces=self._traces,
-                        output_folder=self._plot_directory)
+                        output_folder=self._plot_directory,
+                        keep_original_file=self._keep_original_file)
 
 
 @register_profiler(name='memory-profiler-line')

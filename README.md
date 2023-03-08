@@ -6,7 +6,7 @@ To achieve this goal, the task is splitted into two interfaces. The `Profiler` c
 
 # Install
 
-Installation instruction
+The package can be directly installed from this repository using the command `pip install --upgrade git+https://github.com/cecabert/pyprofiler.git`, make sure it is invoked within the correct python environment.
 
 # Profiler
 
@@ -118,3 +118,9 @@ python -m pyprofiler.cli <path>::<class>::<case> <profiler> <arguments>
 where `<case>` is the name of the profile case that need to be run.
 
 # Examples
+
+The examples are located in this [folder](./examples/). Different usecases are highlighted in the following files:
+
+- [timing.py](./examples/timing.py)
+- [memory.py](./examples/memory.py)
+- [graph.py](./examples/graph.py)

@@ -13,6 +13,7 @@ from glob import glob
 from datetime import datetime
 from inspect import getmembers
 from typing import Optional, Callable, List, IO
+from contextlib import redirect_stdout
 from pyprofiler.utils.decorator import (ProfilerFactory,
                                         _ACCEPT_PROFILER_ATTR,
                                         _SKIP_CASE_ATTR,
@@ -118,6 +119,7 @@ class ProfilerCase:
                  func: Optional[str] = None):
         # Set profiler and discover profiler cases
         self._profiler = profiler
+        self._stream = None
         self._profile_cases = self.list_functions(self, func)
 
     def setUp(self):
@@ -134,42 +136,45 @@ class ProfilerCase:
         :param name: Name of the trace event
         """
         if self._profiler:
+            self._stream.write(f'Add trace: `{name}`')
             self._profiler.trace(name)
 
     def runCases(self,
                  stream: ProfilerStream):
         """ Run all profile cases """
-        for case_fn in self._profile_cases:
-            # Skipping?
-            skipped = False
-            reason = ''
-            if _should_skip_case(case_fn):
-                skipped = True
-                reason = '\tMarked as `skipped` by user!'
-            elif _should_skip_profiler(case_fn, self._profiler):
-                skipped = True
-                reason = '\tMarked as `skipped` because it does not ' \
-                    'support {}!'.format(self._profiler.__class__.__name__)
-            # Dump info
-            status = 'Skipping' if skipped else 'Running'
-            dotted_line = ANSI.BOLD + '{}'.format('-' * 80) + ANSI.RESET
-            stream.write(dotted_line)
-            stream.write('{}{}{}: {}:{}'.format(ANSI.BOLD,
-                                                status,
-                                                ANSI.RESET,
-                                                self.__class__.__name__,
-                                                case_fn.__name__))
-            stream.write(dotted_line)
-            # Start profiler using context manager
-            if not skipped:
-                # Setup
-                self.setUp()
-                # Run profile fixture
-                with self._profiler as prof:
-                    prof(case_fn)
-                # Tear down
-                self.tearDown()
-                # Report
-                self._profiler.report(stream)
-            else:
-                stream.write(reason)
+        self._stream = stream
+        with redirect_stdout(stream):
+            for case_fn in self._profile_cases:
+                # Skipping?
+                skipped = False
+                reason = ''
+                if _should_skip_case(case_fn):
+                    skipped = True
+                    reason = '\tMarked as `skipped` by user!'
+                elif _should_skip_profiler(case_fn, self._profiler):
+                    skipped = True
+                    reason = '\tMarked as `skipped` because it does not ' \
+                        'support {}!'.format(self._profiler.__class__.__name__)
+                # Dump info
+                status = 'Skipping' if skipped else 'Running'
+                dotted_line = ANSI.BOLD + '{}'.format('-' * 80) + ANSI.RESET
+                stream.write(dotted_line)
+                stream.write('{}{}{}: {}:{}'.format(ANSI.BOLD,
+                                                    status,
+                                                    ANSI.RESET,
+                                                    self.__class__.__name__,
+                                                    case_fn.__name__))
+                stream.write(dotted_line)
+                # Start profiler using context manager
+                if not skipped:
+                    # Setup
+                    self.setUp()
+                    # Run profile fixture
+                    with self._profiler as prof:
+                        prof(case_fn)
+                    # Tear down
+                    self.tearDown()
+                    # Report
+                    self._profiler.report(stream)
+                else:
+                    stream.write(reason)
